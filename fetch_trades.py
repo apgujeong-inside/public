@@ -111,7 +111,7 @@ def enrich(t, conf):
         label = conf.get("_dong_map", {}).get((zone, dong), label)
     area, fl, a = t["area"], t.get("floor"), str(round(t["area"]))
     pm = lookup_py(conf, zone, label, area)
-    land = conf.get("_land", {}).get((label, a))
+    land = conf.get("_land", {}).get((label, a)) or conf.get("_zone_land", {}).get((zone, a))
     pub = None
     if fl is not None:
         pub = conf.get("_pub_dong", {}).get((zone, dong, fl, a)) or conf.get("_pub_label", {}).get((label, fl, a))
@@ -128,12 +128,13 @@ PUB_CSV = ROOT / "public_price.csv"     # 동·층·전용면적별 공시가(�
 
 
 def load_info(conf):
-    land, units, pd_, pl = {}, {}, {}, {}
+    land, units, pd_, pl, zl = {}, {}, {}, {}, {}
     if INFO_CSV.exists():
         with open(INFO_CSV, encoding="utf-8-sig", newline="") as f:
             for r in csv.DictReader(f):
                 a = str(round(float(r["전용면적"])))
                 land[(r["단지"], a)] = float(r["대지지분평"])
+                zl.setdefault((int(float(r["구역"])), a), []).append(float(r["대지지분평"]))
                 z, n = units.get(r["단지"], (int(float(r["구역"])), 0))
                 units[r["단지"]] = (z, n + int(float(r["세대수"])))
     if PUB_CSV.exists():
@@ -144,7 +145,8 @@ def load_info(conf):
                 pd_[(int(float(r["구역"])), str(int(float(r["동"]))), fl, a)] = v
                 tmp.setdefault((r["단지"], fl, a), []).append(v)
         pl = {k: round(sum(v) / len(v), 2) for k, v in tmp.items()}
-    conf.update(_land=land, _units=units, _pub_dong=pd_, _pub_label=pl)
+    zl = {k: round(sum(v) / len(v), 2) for k, v in zl.items() if max(v) - min(v) < 0.05}
+    conf.update(_land=land, _units=units, _pub_dong=pd_, _pub_label=pl, _zone_land=zl)
     return len(land), len(pd_)
 
 

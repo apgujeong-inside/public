@@ -77,7 +77,7 @@ footer b{font-size:15px}
   <div id="zone"></div>
 
   <p class="note">출처: 국토교통부 아파트 매매 실거래가 공개자료. 신고 후 공개까지 시차가 있어 최근 계약일의 거래가 늦게 나타날 수 있습니다.
-  평형 앞의 ≈ 는 전용면적으로 추정한 값입니다. 지분평당은 매매가÷대지지분(평), 공시가 배수는 매매가÷공시가(2026.1.1, 동·층 평균이라 라인별로 소폭 다를 수 있음)이며, 1년 거래 비율은 최근 1년 거래건수÷세대수입니다. 참고용 자료이며 실제 거래 전에는 반드시 원본 자료와 현장 상황을 확인하세요.</p>
+  평형 앞의 ≈ 는 전용면적으로 추정한 값입니다. 지분평당가는 매매가÷대지지분(평), 공시가 배수는 매매가÷공시가(2026.1.1, 동·층 평균이라 라인별로 소폭 다를 수 있음)이며, 1년 거래 비율은 최근 1년 거래건수÷세대수입니다. 참고용 자료이며 실제 거래 전에는 반드시 원본 자료와 현장 상황을 확인하세요.</p>
 
   <footer>
     <b>압구정 인사이드 공인중개사 사무소</b><br>
@@ -89,11 +89,11 @@ footer b{font-size:15px}
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const won=a=>{const e=Math.floor(a/10000),r=a%10000;return `<b>${e}</b>억${r?` <span class="r">${r.toLocaleString()}</span>`:""}`};
+const won=a=>`<b>${(a/10000).toFixed(2).replace(/\.?0+$/,"")}</b>억`;
 const ymd=d=>d.slice(2,4)+"."+d.slice(5,7)+"."+d.slice(8,10);
 const pyTxt=t=>t.py?`${t.py_est?"≈":""}${t.py}평`:(t.area?`전용${Math.round(t.area)}㎡`:"");
 const row=t=>`<div class="row"><span class="dt">${ymd(t.date)}</span><span class="nm"><b>${esc(t.label)} ${pyTxt(t)}</b><small>${t.floor!=null?t.floor+"층":""}${t.dong?" · "+esc(t.dong)+"동":""}</small>${t.high?'<i class="bd">신고가</i>':""}${meta(t)}</span><span class="pr">${won(t.price)}</span></div>`;
-const meta=t=>{const a=[];if(t.land)a.push(`지분 ${t.land}평`);if(t.lpp)a.push(`지분평당 ${t.lpp}억`);if(t.pubx)a.push(`공시가 ${t.pubx}배`);return a.length?`<div class="mt">${a.join(" · ")}</div>`:""};
+const meta=t=>{const a=[];if(t.land)a.push(`대지지분 ${t.land.toFixed(2)}평`);if(t.lpp)a.push(`지분평당가 ${t.lpp.toFixed(2)}억`);if(t.pubx)a.push(`공시가 ${t.pubx.toFixed(2)}배`);return a.length?`<div class="mt">${a.join(" · ")}</div>`:""};
 const zkey=t=>t.zone==null?"?":String(t.zone);
 let D=null,zone="all",q="",YR={};
 
