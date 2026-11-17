@@ -44,6 +44,8 @@ def fetch_month(key, ym):
                     raise
                 time.sleep(3)
         code = root.findtext(".//resultCode")
+        if code in ("03", "003"):  # No Data: 거래 없는 달
+            break
         if code not in ("00", "000"):
             sys.exit(f"API 오류 {ym}: {code} {root.findtext('.//resultMsg')}")
         for it in root.findall(".//item"):
@@ -96,6 +98,9 @@ def to_trade(it, conf):
         "id": tid, "apt": it["aptNm"], "label": label, "zone": zone,
         "py": py, "py_est": est, "area": area, "floor": floor, "dong": dong,
         "price": price, "date": date, "first_seen": None, "high": False,
+        "build": it.get("buildYear") or None,
+        "buyer": it.get("buyerGbn") or None, "seller": it.get("slerGbn") or None,
+        "dealing": it.get("dealingGbn") or None, "rgst": it.get("rgstDate") or None,
         "cancel": it.get("cdealType", "") == "O",
     }
 
