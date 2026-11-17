@@ -90,24 +90,62 @@ def to_trade(it, conf):
         date = dt.date(int(it["dealYear"]), int(it["dealMonth"]), int(it["dealDay"])).isoformat()
     except (KeyError, ValueError):
         return None
-    zone, label = classify(it.get("aptNm", ""), conf)
-    dong = it.get("aptDong", "").replace("동", "").strip() or None
-    if zone is not None and dong:  # 합쳐진 단지명(예: 현대6·7차)을 동 번호로 정확히 구분
-        label = conf.get("_dong_map", {}).get((zone, dong), label)
-    pm = lookup_py(conf, zone, label, area)
-    est = pm is None
-    py = pm if pm else round(area / conf.get("supply_ratio", 0.75) / 3.3058)
     floor = int(it["floor"]) if it.get("floor", "").lstrip("-").isdigit() else None
+    dong = it.get("aptDong", "").replace("동", "").strip() or None
     tid = f"{it['aptNm']}|{dong}|{area}|{floor}|{date}|{price}"
-    return {
-        "id": tid, "apt": it["aptNm"], "label": label, "zone": zone,
-        "py": py, "py_est": est, "area": area, "floor": floor, "dong": dong,
+    return enrich({
+        "id": tid, "apt": it["aptNm"], "area": area, "floor": floor, "dong": dong,
         "price": price, "date": date, "first_seen": None, "high": False,
         "build": it.get("buildYear") or None,
         "buyer": it.get("buyerGbn") or None, "seller": it.get("slerGbn") or None,
         "dealing": it.get("dealingGbn") or None, "rgst": it.get("rgstDate") or None,
         "cancel": it.get("cdealType", "") == "O",
-    }
+    }, conf)
+
+
+def enrich(t, conf):
+    """원본 단지명·동·면적·층으로 구역/단지/평형/대지지분/공시가를 (다시) 계산한다."""
+    zone, label = classify(t["apt"], conf)
+    dong = t.get("dong")
+    if zone is not None and dong:  # 합쳐진 단지명(예: 현대6·7차)을 동 번호로 정확히 구분
+        label = conf.get("_dong_map", {}).get((zone, dong), label)
+    area, fl, a = t["area"], t.get("floor"), str(round(t["area"]))
+    pm = lookup_py(conf, zone, label, area)
+    land = conf.get("_land", {}).get((label, a))
+    pub = None
+    if fl is not None:
+        pub = conf.get("_pub_dong", {}).get((zone, dong, fl, a)) or conf.get("_pub_label", {}).get((label, fl, a))
+    t.update(zone=zone, label=label, py_est=pm is None,
+             py=pm or round(area / conf.get("supply_ratio", 0.75) / 3.3058),
+             land=land, pub=pub,
+             lpp=round(t["price"] / 10000 / land, 2) if land else None,    # 지분 평당가(억/평)
+             pubx=round(t["price"] / 10000 / pub, 2) if pub else None)     # 공시가 배수
+    return t
+
+
+INFO_CSV = ROOT / "complex_info.csv"    # 단지×전용면적: 대지지분(평)·세대수
+PUB_CSV = ROOT / "public_price.csv"     # 동·층·전용면적별 공시가(억, 2026.1.1)
+
+
+def load_info(conf):
+    land, units, pd_, pl = {}, {}, {}, {}
+    if INFO_CSV.exists():
+        with open(INFO_CSV, encoding="utf-8-sig", newline="") as f:
+            for r in csv.DictReader(f):
+                a = str(round(float(r["전용면적"])))
+                land[(r["단지"], a)] = float(r["대지지분평"])
+                z, n = units.get(r["단지"], (int(float(r["구역"])), 0))
+                units[r["단지"]] = (z, n + int(float(r["세대수"])))
+    if PUB_CSV.exists():
+        tmp = {}
+        with open(PUB_CSV, encoding="utf-8-sig", newline="") as f:
+            for r in csv.DictReader(f):
+                a, fl, v = str(round(float(r["전용면적"]))), int(float(r["층"])), float(r["공시가"])
+                pd_[(int(float(r["구역"])), str(int(float(r["동"]))), fl, a)] = v
+                tmp.setdefault((r["단지"], fl, a), []).append(v)
+        pl = {k: round(sum(v) / len(v), 2) for k, v in tmp.items()}
+    conf.update(_land=land, _units=units, _pub_dong=pd_, _pub_label=pl)
+    return len(land), len(pd_)
 
 
 PY_CSV = ROOT / "pyeong.csv"          # 정훈님이 확정한 평형표 (직접 올리는 파일)
@@ -195,7 +233,7 @@ def months(backfill):
 def main():
     backfill = "--backfill" in sys.argv
     conf = json.loads(CONF.read_text(encoding="utf-8"))
-    print(f"확정 평형 {load_pyeong_csv(conf)}건, 동 매핑 {load_dong_map(conf)}건 적용")
+    print(f"확정 평형 {load_pyeong_csv(conf)}건, 동 매핑 {load_dong_map(conf)}건, 지분/공시가 {load_info(conf)} 적용")
     key = get_key()
     old = json.loads(DATA.read_text(encoding="utf-8")) if DATA.exists() else {}
     had_data = bool(old.get("trades")) and not old.get("sample")
@@ -218,6 +256,9 @@ def main():
             trades[t["id"]] = t
         time.sleep(0.2)
 
+    for t in trades.values():  # 평형·지분·공시가 표가 바뀌면 이전 거래에도 반영
+        enrich(t, conf)
+
     # 신고가: 같은 단지·평형에서 이전 계약 최고가를 넘으면 표시
     rows = sorted(trades.values(), key=lambda t: t["date"])
     best = {}
@@ -229,7 +270,9 @@ def main():
     rows.sort(key=lambda t: (t["date"], t["price"]), reverse=True)
     DATA.write_text(json.dumps({
         "updated": dt.datetime.now(KST).isoformat(timespec="minutes"),
-        "count": len(rows), "trades": rows}, ensure_ascii=False), encoding="utf-8")
+        "count": len(rows),
+        "complexes": {k: {"zone": z, "units": n} for k, (z, n) in conf["_units"].items()},
+        "trades": rows}, ensure_ascii=False), encoding="utf-8")
 
     write_pyeong_table(rows, conf)
     miss = {}

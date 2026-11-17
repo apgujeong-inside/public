@@ -30,6 +30,7 @@ h2::before{content:"";width:4px;height:15px;border-radius:2px;background:var(--r
 .dt{font-size:13px;color:var(--ink-2)}
 .nm b{font-weight:700;font-size:15px}
 .nm small{color:var(--ink-2);font-size:12.5px;margin-left:2px}
+.mt{font-size:12.5px;color:var(--ink-2);margin-top:2px}
 .bd{font-style:normal;background:var(--sig-red);color:#fff;font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 8px;margin-left:6px;white-space:nowrap}
 .pr{text-align:right;font-size:14px;color:var(--ink);white-space:nowrap}
 .pr b{font-size:22px;font-weight:800}
@@ -46,7 +47,7 @@ input{width:100%;border:1px solid var(--line);background:#fff;border-radius:var(
 details{background:#fff;border:1px solid var(--line);border-radius:var(--radius);margin-bottom:8px;padding:0 14px}
 summary{cursor:pointer;list-style:none;padding:13px 0;display:flex;justify-content:space-between;gap:8px;align-items:center;font-weight:800}
 summary::-webkit-details-marker{display:none}
-summary span{font-weight:400;font-size:13px;color:var(--ink-2)}
+summary span{font-weight:400;font-size:13px;color:var(--ink-2);text-align:right}
 .empty{color:var(--mute);padding:14px 0;font-size:14px}
 footer{margin-top:34px;background:var(--deep);color:#fff;border-radius:var(--radius);padding:18px;text-align:center;line-height:1.7}
 footer b{font-size:15px}
@@ -76,7 +77,7 @@ footer b{font-size:15px}
   <div id="zone"></div>
 
   <p class="note">출처: 국토교통부 아파트 매매 실거래가 공개자료. 신고 후 공개까지 시차가 있어 최근 계약일의 거래가 늦게 나타날 수 있습니다.
-  평형 앞의 ≈ 는 전용면적으로 추정한 값입니다. 참고용 자료이며 실제 거래 전에는 반드시 원본 자료와 현장 상황을 확인하세요.</p>
+  평형 앞의 ≈ 는 전용면적으로 추정한 값입니다. 지분평당은 매매가÷대지지분(평), 공시가 배수는 매매가÷공시가(2026.1.1, 동·층 평균이라 라인별로 소폭 다를 수 있음)이며, 1년 거래 비율은 최근 1년 거래건수÷세대수입니다. 참고용 자료이며 실제 거래 전에는 반드시 원본 자료와 현장 상황을 확인하세요.</p>
 
   <footer>
     <b>압구정 인사이드 공인중개사 사무소</b><br>
@@ -91,9 +92,10 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const won=a=>{const e=Math.floor(a/10000),r=a%10000;return `<b>${e}</b>억${r?` <span class="r">${r.toLocaleString()}</span>`:""}`};
 const ymd=d=>d.slice(2,4)+"."+d.slice(5,7)+"."+d.slice(8,10);
 const pyTxt=t=>t.py?`${t.py_est?"≈":""}${t.py}평`:(t.area?`전용${Math.round(t.area)}㎡`:"");
-const row=t=>`<div class="row"><span class="dt">${ymd(t.date)}</span><span class="nm"><b>${esc(t.label)} ${pyTxt(t)}</b><small>${t.floor!=null?t.floor+"층":""}${t.dong?" · "+esc(t.dong)+"동":""}</small>${t.high?'<i class="bd">신고가</i>':""}</span><span class="pr">${won(t.price)}</span></div>`;
+const row=t=>`<div class="row"><span class="dt">${ymd(t.date)}</span><span class="nm"><b>${esc(t.label)} ${pyTxt(t)}</b><small>${t.floor!=null?t.floor+"층":""}${t.dong?" · "+esc(t.dong)+"동":""}</small>${t.high?'<i class="bd">신고가</i>':""}${meta(t)}</span><span class="pr">${won(t.price)}</span></div>`;
+const meta=t=>{const a=[];if(t.land)a.push(`지분 ${t.land}평`);if(t.lpp)a.push(`지분평당 ${t.lpp}억`);if(t.pubx)a.push(`공시가 ${t.pubx}배`);return a.length?`<div class="mt">${a.join(" · ")}</div>`:""};
 const zkey=t=>t.zone==null?"?":String(t.zone);
-let D=null,zone="all",q="";
+let D=null,zone="all",q="",YR={};
 
 function fmtDay(iso){const d=new Date(iso+"T00:00:00+09:00");return `${d.getMonth()+1}월 ${d.getDate()}일`}
 function kstToday(){return new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Seoul"})).toISOString().slice(0,10).replace(/T.*/,"")}
@@ -134,14 +136,24 @@ function renderZone(){
   const g=new Map();
   list.forEach(t=>{const k=t.label;if(!g.has(k))g.set(k,[]);g.get(k).push(t)});
   const names=[...g.keys()].sort((a,b)=>a.localeCompare(b,"ko",{numeric:true}));
-  const sub=zone==="all"?"":`<div class="zs">${names.map(esc).join(" · ")}</div>`;
+  const CX=D.complexes||{};
+  let zu=0,zn=0;
+  Object.keys(CX).forEach(k=>{if(String(CX[k].zone)===zone){zu+=CX[k].units;zn+=YR[k]||0}});
+  const zsum=(zone!=="all"&&zu)?` · 세대수 ${zu.toLocaleString()} · 최근 1년 ${zn}건${turn(zn,zu)}`:"";
+  const sub=zone==="all"?"":`<div class="zs">${names.map(esc).join(" · ")}${zsum}</div>`;
   const open=q||names.length===1;
   $("#zone").innerHTML=head+sub+names.map(n=>{
     const ts=g.get(n),top=ts[0];
-    return `<details ${open?"open":""}><summary>${esc(n)}<span>${ts.length}건 · 최근 ${ymd(top.date)}</span></summary>${ts.slice(0,100).map(row).join("")}${ts.length>100?`<div class="empty">최근 100건만 표시합니다. 평형·동으로 좁혀 보세요.</div>`:""}</details>`;
+    return `<details ${open?"open":""}><summary>${esc(n)}<span>${ts.length}건 · 최근 ${ymd(top.date)}${CX[n]?`<br>세대수 ${CX[n].units.toLocaleString()} · 1년 ${YR[n]||0}건${turn(YR[n]||0,CX[n].units)}`:""}</span></summary>${ts.slice(0,100).map(row).join("")}${ts.length>100?`<div class="empty">최근 100건만 표시합니다. 평형·동으로 좁혀 보세요.</div>`:""}</details>`;
   }).join("");
 }
+function calcYear(){
+  const c=new Date(D.updated);c.setFullYear(c.getFullYear()-1);const cs=c.toISOString().slice(0,10);
+  YR={};D.trades.forEach(t=>{if(t.date>=cs)YR[t.label]=(YR[t.label]||0)+1});
+}
+const turn=(n,u)=>u?` (${(n/u*100).toFixed(1)}%)`:"";
 function renderAll(){
+  calcYear();
   const dt=new Date(D.updated);
   $("#stamp").textContent=`${dt.getFullYear()}.${dt.getMonth()+1}.${dt.getDate()} ${String(dt.getHours()).padStart(2,"0")}:${String(dt.getMinutes()).padStart(2,"0")} 공개분까지 반영 · 2006년 이후 ${D.count.toLocaleString()}건`;
   if(D.sample)$("#sample").style.display="block";
