@@ -7,7 +7,7 @@
 
 환경변수 MOLIT_KEY 에 공공데이터포털 인증키(일반 인증키)를 넣어야 합니다.
 """
-import os, sys, re, json, time, datetime as dt
+import os, sys, re, csv, json, time, datetime as dt
 import urllib.request, urllib.parse
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -67,6 +67,9 @@ def classify(apt, conf):
     for raw, v in conf.get("overrides", {}).items():
         if norm(raw) == n:
             return v["zone"], v["label"]
+    m = re.match(r"^신현대\(?(?:현대)?(\d+(?:[,.]\d+)*)", n)
+    if m and not re.search(r"[,.]", m.group(1)):
+        return 2, f"신현대 {m.group(1)}차"
     for k in conf.get("keywords", []):
         if k["kw"] in n:
             return k["zone"], k["label"]
@@ -88,11 +91,13 @@ def to_trade(it, conf):
     except (KeyError, ValueError):
         return None
     zone, label = classify(it.get("aptNm", ""), conf)
-    pm = conf.get("pyeong", {}).get(label, {}).get(str(round(area)))
+    dong = it.get("aptDong", "").replace("동", "").strip() or None
+    if zone is not None and dong:  # 합쳐진 단지명(예: 현대6·7차)을 동 번호로 정확히 구분
+        label = conf.get("_dong_map", {}).get((zone, dong), label)
+    pm = lookup_py(conf, zone, label, area)
     est = pm is None
     py = pm if pm else round(area / conf.get("supply_ratio", 0.75) / 3.3058)
     floor = int(it["floor"]) if it.get("floor", "").lstrip("-").isdigit() else None
-    dong = it.get("aptDong", "").replace("동", "").strip() or None
     tid = f"{it['aptNm']}|{dong}|{area}|{floor}|{date}|{price}"
     return {
         "id": tid, "apt": it["aptNm"], "label": label, "zone": zone,
@@ -103,6 +108,79 @@ def to_trade(it, conf):
         "dealing": it.get("dealingGbn") or None, "rgst": it.get("rgstDate") or None,
         "cancel": it.get("cdealType", "") == "O",
     }
+
+
+PY_CSV = ROOT / "pyeong.csv"          # 정훈님이 확정한 평형표 (직접 올리는 파일)
+PY_TABLE = ROOT / "pyeong_table.csv"  # 자동 생성되는 작업용 표
+
+
+DONG_CSV = ROOT / "dong_map.csv"      # 구역·동 → 단지 (압구정통합검색 공시가 시트에서 추출)
+
+
+def lookup_py(conf, zone, label, area):
+    """확정 평형 조회: 단지+전용면적 우선, 없으면 같은 구역에서 평형이 하나로 정해지는 경우만 사용."""
+    a = str(round(area))
+    v = conf.get("pyeong", {}).get(label, {}).get(a)
+    if v:
+        return v
+    return conf.get("_zone_area", {}).get((zone, a))
+
+
+def load_pyeong_csv(conf):
+    """pyeong.csv 의 '확정평형' 값을 conf 에 합친다."""
+    if not PY_CSV.exists():
+        return 0
+    n, za = 0, {}
+    with open(PY_CSV, encoding="utf-8-sig", newline="") as f:
+        for r in csv.DictReader(f):
+            py = (r.get("확정평형") or "").strip()
+            label, area = (r.get("단지") or "").strip(), (r.get("전용면적") or "").strip()
+            if not (py and label and area):
+                continue
+            try:
+                a, pyi = str(round(float(area))), int(float(py))
+                conf.setdefault("pyeong", {}).setdefault(label, {})[a] = pyi
+                z = (r.get("구역") or "").strip()
+                if z.replace(".", "").isdigit():
+                    za.setdefault((int(float(z)), a), set()).add(pyi)
+                n += 1
+            except ValueError:
+                print(f"pyeong.csv 무시: {label} {area} {py}")
+    conf["_zone_area"] = {k: next(iter(v)) for k, v in za.items() if len(v) == 1}
+    return n
+
+
+def load_dong_map(conf):
+    m = {}
+    if DONG_CSV.exists():
+        with open(DONG_CSV, encoding="utf-8-sig", newline="") as f:
+            for r in csv.DictReader(f):
+                try:
+                    m[(int(float(r["구역"])), str(r["동"]).strip())] = r["단지"].strip()
+                except (KeyError, ValueError):
+                    pass
+    conf["_dong_map"] = m
+    return len(m)
+
+
+def write_pyeong_table(rows, conf):
+    """단지×전용면적 조합 전체를 표로 저장. 확정된 것은 확정평형 칸이 채워져 있다."""
+    g = {}
+    for t in rows:
+        if not t.get("area"):
+            continue
+        k = (t["zone"] if t["zone"] is not None else 99, t["label"], round(t["area"]))
+        e = g.setdefault(k, {"n": 0, "last": ""})
+        e["n"] += 1
+        e["last"] = max(e["last"], t["date"])
+    ratio = conf.get("supply_ratio", 0.75)
+    with open(PY_TABLE, "w", encoding="utf-8-sig", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["구역", "단지", "전용면적", "거래건수", "최근계약일", "추정평형", "확정평형"])
+        for (z, label, area), e in sorted(g.items()):
+            fixed = lookup_py(conf, None if z == 99 else z, label, area) or ""
+            w.writerow(["미지정" if z == 99 else z, label, area, e["n"], e["last"],
+                        round(area / ratio / 3.3058), fixed])
 
 
 def months(backfill):
@@ -117,6 +195,7 @@ def months(backfill):
 def main():
     backfill = "--backfill" in sys.argv
     conf = json.loads(CONF.read_text(encoding="utf-8"))
+    print(f"확정 평형 {load_pyeong_csv(conf)}건, 동 매핑 {load_dong_map(conf)}건 적용")
     key = get_key()
     old = json.loads(DATA.read_text(encoding="utf-8")) if DATA.exists() else {}
     had_data = bool(old.get("trades")) and not old.get("sample")
@@ -152,6 +231,7 @@ def main():
         "updated": dt.datetime.now(KST).isoformat(timespec="minutes"),
         "count": len(rows), "trades": rows}, ensure_ascii=False), encoding="utf-8")
 
+    write_pyeong_table(rows, conf)
     miss = {}
     for t in rows:
         if t["zone"] is None:
