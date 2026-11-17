@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>압구정 실거래 전광판 | 압구정 인사이드</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<style>
+:root{
+  --deep:#0B2E3B;--deep-2:#123F4F;--river:#12796F;--river-soft:#E3F1EE;
+  --ivory:#F2EFE6;--line:#E2DED2;--ink:#0B2E3B;--ink-2:#42525A;--mute:#6B7A81;
+  --sig-red:#C2552E;--radius:12px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ivory);color:var(--ink);font-family:Pretendard,-apple-system,"Noto Sans KR",sans-serif;font-variant-numeric:tabular-nums;line-height:1.45}
+.wrap{max-width:640px;margin:0 auto;padding:16px 14px 40px}
+.hero{background:var(--deep);color:#fff;border-radius:var(--radius);padding:20px 18px}
+.hero small{color:var(--river-soft);font-size:13px}
+.hero h1{margin:6px 0 12px;font-size:28px;font-weight:800;letter-spacing:-.02em}
+.stamp{display:inline-block;background:var(--deep-2);border-radius:999px;padding:7px 12px;font-size:13px;color:#fff}
+.sample{display:none;margin-top:10px;background:#FFFBF4;border:1px solid #EFE3C4;color:#6B5A32;border-radius:8px;padding:8px 10px;font-size:13px}
+h2{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:800;margin:26px 0 4px}
+h2::before{content:"";width:4px;height:15px;border-radius:2px;background:var(--river)}
+.sub{color:var(--ink-2);font-size:13px;margin:0 0 8px}
+.card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:4px 14px}
+.grp{font-size:13px;font-weight:700;color:var(--river);padding:12px 0 2px}
+.row{display:grid;grid-template-columns:52px 1fr auto;gap:8px;align-items:center;padding:11px 0;border-top:1px solid var(--line)}
+.grp+.row,.card>.row:first-child{border-top:0}
+.dt{font-size:13px;color:var(--ink-2)}
+.nm b{font-weight:700;font-size:15px}
+.nm small{color:var(--ink-2);font-size:12.5px;margin-left:2px}
+.bd{font-style:normal;background:var(--sig-red);color:#fff;font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 8px;margin-left:6px;white-space:nowrap}
+.pr{text-align:right;font-size:14px;color:var(--ink);white-space:nowrap}
+.pr b{font-size:22px;font-weight:800}
+.pr .r{font-size:15px;font-weight:700}
+.tabs{display:flex;gap:8px;overflow-x:auto;padding:4px 0 10px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:none;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:999px;padding:9px 16px;font:700 14px Pretendard,sans-serif;cursor:pointer}
+.tab[aria-pressed=true]{background:var(--deep);color:#fff;border-color:var(--deep)}
+.tab:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--river);outline-offset:2px}
+input{width:100%;border:1px solid var(--line);background:#fff;border-radius:var(--radius);padding:12px 14px;font:400 15px Pretendard,sans-serif;color:var(--ink)}
+.zt{font-size:44px;font-weight:800;margin:20px 0 0;line-height:1}
+.zt small{font-size:26px}
+.zs{color:var(--ink-2);font-size:13.5px;margin:6px 0 10px}
+details{background:#fff;border:1px solid var(--line);border-radius:var(--radius);margin-bottom:8px;padding:0 14px}
+summary{cursor:pointer;list-style:none;padding:13px 0;display:flex;justify-content:space-between;gap:8px;align-items:center;font-weight:800}
+summary::-webkit-details-marker{display:none}
+summary span{font-weight:400;font-size:13px;color:var(--ink-2)}
+.empty{color:var(--mute);padding:14px 0;font-size:14px}
+footer{margin-top:34px;background:var(--deep);color:#fff;border-radius:var(--radius);padding:18px;text-align:center;line-height:1.7}
+footer b{font-size:15px}
+.note{color:var(--ink-2);font-size:12px;margin-top:14px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="hero">
+    <small>압구정 재건축 1~6구역 · 국토교통부 실거래가</small>
+    <h1>압구정 실거래 전광판</h1>
+    <span class="stamp" id="stamp">불러오는 중…</span>
+    <div class="sample" id="sample">지금 보이는 것은 화면 확인용 샘플 데이터입니다. 자동 갱신이 한 번 실행되면 실제 데이터로 바뀝니다.</div>
+  </section>
+
+  <h2>새로 뜬 거래</h2>
+  <p class="sub">국토부 자료에 처음 올라온 날로 묶었습니다. 줄 앞의 날짜는 계약일입니다.</p>
+  <div class="card" id="fresh"></div>
+
+  <h2>최근 계약</h2>
+  <p class="sub">계약일이 가까운 순서입니다.</p>
+  <div class="card" id="recent"></div>
+
+  <h2>구역별 실거래</h2>
+  <div class="tabs" id="tabs"></div>
+  <input id="q" type="search" placeholder="평형·동으로 찾기 (예: 35평, 113동, 현대 14차)" aria-label="검색">
+  <div id="zone"></div>
+
+  <p class="note">출처: 국토교통부 아파트 매매 실거래가 공개자료. 신고 후 공개까지 시차가 있어 최근 계약일의 거래가 늦게 나타날 수 있습니다.
+  평형 앞의 ≈ 는 전용면적으로 추정한 값입니다. 참고용 자료이며 실제 거래 전에는 반드시 원본 자료와 현장 상황을 확인하세요.</p>
+
+  <footer>
+    <b>압구정 인사이드 공인중개사 사무소</b><br>
+    대표 오정훈<br>
+    📱 010 2132 0815
+  </footer>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const won=a=>{const e=Math.floor(a/10000),r=a%10000;return `<b>${e}</b>억${r?` <span class="r">${r.toLocaleString()}</span>`:""}`};
+const ymd=d=>d.slice(2,4)+"."+d.slice(5,7)+"."+d.slice(8,10);
+const pyTxt=t=>t.py?`${t.py_est?"≈":""}${t.py}평`:(t.area?`전용${Math.round(t.area)}㎡`:"");
+const row=t=>`<div class="row"><span class="dt">${ymd(t.date)}</span><span class="nm"><b>${esc(t.label)} ${pyTxt(t)}</b><small>${t.floor!=null?t.floor+"층":""}${t.dong?" · "+esc(t.dong)+"동":""}</small>${t.high?'<i class="bd">신고가</i>':""}</span><span class="pr">${won(t.price)}</span></div>`;
+const zkey=t=>t.zone==null?"?":String(t.zone);
+let D=null,zone="all",q="";
+
+function fmtDay(iso){const d=new Date(iso+"T00:00:00+09:00");return `${d.getMonth()+1}월 ${d.getDate()}일`}
+function kstToday(){return new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Seoul"})).toISOString().slice(0,10).replace(/T.*/,"")}
+
+function renderFresh(){
+  const seen=D.trades.filter(t=>t.first_seen);
+  const days=[...new Set(seen.map(t=>t.first_seen))].sort().reverse().slice(0,3);
+  if(!days.length){$("#fresh").innerHTML='<div class="empty">아직 새로 뜬 거래가 없습니다. 내일부터 하루 단위로 쌓입니다.</div>';return}
+  $("#fresh").innerHTML=days.map(d=>{
+    const list=seen.filter(t=>t.first_seen===d);
+    return `<div class="grp">${fmtDay(d)} 공개 · ${list.length}건</div>`+list.map(row).join("");
+  }).join("");
+}
+function renderRecent(){
+  $("#recent").innerHTML=D.trades.slice(0,10).map(row).join("")||'<div class="empty">거래가 없습니다.</div>';
+}
+function renderTabs(){
+  const has=new Set(D.trades.map(zkey));
+  const items=[["all","전체"],...[1,2,3,4,5,6].map(n=>[String(n),n+"구역"])];
+  if(has.has("?"))items.push(["?","미분류"]);
+  $("#tabs").innerHTML=items.map(([k,l])=>`<button class="tab" data-k="${k}" aria-pressed="${k===zone}">${l}</button>`).join("");
+}
+function match(t){
+  if(zone!=="all"&&zkey(t)!==zone)return false;
+  if(!q)return true;
+  return q.split(/\s+/).filter(Boolean).every(w=>{
+    let m;
+    if(m=w.match(/^(\d+)평$/))return t.py==+m[1];
+    if(m=w.match(/^(\d+)동$/))return t.dong==m[1];
+    if(m=w.match(/^(\d+)층$/))return t.floor==+m[1];
+    return (t.label+t.apt).replace(/\s/g,"").includes(w);
+  });
+}
+function renderZone(){
+  const list=D.trades.filter(match);
+  const head=zone==="all"?"":`<div class="zt">${zone==="?"?"미분류":zone+"<small>구역</small>"}</div>`;
+  if(!list.length){$("#zone").innerHTML=head+'<div class="empty">조건에 맞는 거래가 없습니다.</div>';return}
+  const g=new Map();
+  list.forEach(t=>{const k=t.label;if(!g.has(k))g.set(k,[]);g.get(k).push(t)});
+  const names=[...g.keys()].sort((a,b)=>a.localeCompare(b,"ko",{numeric:true}));
+  const sub=zone==="all"?"":`<div class="zs">${names.map(esc).join(" · ")}</div>`;
+  const open=q||names.length===1;
+  $("#zone").innerHTML=head+sub+names.map(n=>{
+    const ts=g.get(n),top=ts[0];
+    return `<details ${open?"open":""}><summary>${esc(n)}<span>${ts.length}건 · 최근 ${ymd(top.date)}</span></summary>${ts.slice(0,100).map(row).join("")}${ts.length>100?`<div class="empty">최근 100건만 표시합니다. 평형·동으로 좁혀 보세요.</div>`:""}</details>`;
+  }).join("");
+}
+function renderAll(){
+  const dt=new Date(D.updated);
+  $("#stamp").textContent=`${dt.getFullYear()}.${dt.getMonth()+1}.${dt.getDate()} ${String(dt.getHours()).padStart(2,"0")}:${String(dt.getMinutes()).padStart(2,"0")} 공개분까지 반영 · 2006년 이후 ${D.count.toLocaleString()}건`;
+  if(D.sample)$("#sample").style.display="block";
+  renderFresh();renderRecent();renderTabs();renderZone();
+}
+$("#tabs").addEventListener("click",e=>{const b=e.target.closest(".tab");if(!b)return;zone=b.dataset.k;renderTabs();renderZone()});
+$("#q").addEventListener("input",e=>{q=e.target.value.trim();renderZone()});
+fetch("data.json?"+Date.now()).then(r=>r.json()).then(d=>{D=d;renderAll()}).catch(()=>{$("#stamp").textContent="데이터를 불러오지 못했습니다"});
+</script>
+</body>
+</html>
