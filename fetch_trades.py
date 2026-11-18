@@ -81,6 +81,11 @@ def classify(apt, conf):
     return None, apt
 
 
+def tkey(t):
+    """같은 거래를 알아보는 키 (동 번호는 나중에 채워질 수 있어 제외)."""
+    return f"{t['apt']}|{t['area']}|{t['floor']}|{t['date']}|{t['price']}"
+
+
 def to_trade(it, conf):
     if "압구정" not in it.get("umdNm", ""):
         return None
@@ -92,15 +97,16 @@ def to_trade(it, conf):
         return None
     floor = int(it["floor"]) if it.get("floor", "").lstrip("-").isdigit() else None
     dong = it.get("aptDong", "").replace("동", "").strip() or None
-    tid = f"{it['aptNm']}|{dong}|{area}|{floor}|{date}|{price}"
-    return enrich({
-        "id": tid, "apt": it["aptNm"], "area": area, "floor": floor, "dong": dong,
+    t = enrich({
+        "id": "", "apt": it["aptNm"], "area": area, "floor": floor, "dong": dong,
         "price": price, "date": date, "first_seen": None, "high": False,
         "build": it.get("buildYear") or None,
         "buyer": it.get("buyerGbn") or None, "seller": it.get("slerGbn") or None,
         "dealing": it.get("dealingGbn") or None, "rgst": it.get("rgstDate") or None,
         "cancel": it.get("cdealType", "") == "O",
     }, conf)
+    t["id"] = tkey(t)
+    return t
 
 
 def enrich(t, conf):
@@ -239,11 +245,15 @@ def main():
     key = get_key()
     old = json.loads(DATA.read_text(encoding="utf-8")) if DATA.exists() else {}
     had_data = bool(old.get("trades")) and not old.get("sample")
-    trades = {t["id"]: t for t in old.get("trades", [])} if had_data else {}
+    trades = {tkey(t): t for t in old.get("trades", [])} if had_data else {}
+    for k, t in trades.items():
+        t["id"] = k
     today = dt.datetime.now(KST).date().isoformat()
+    fetched = new_n = 0
 
     for ym in months(backfill):
         for it in fetch_month(key, ym):
+            fetched += 1
             t = to_trade(it, conf)
             if not t:
                 continue
@@ -255,8 +265,12 @@ def main():
                 t["first_seen"] = trades[t["id"]].get("first_seen")
             elif had_data and not backfill:
                 t["first_seen"] = today  # 이번에 처음 보인 거래 = 새로 뜬 거래
+                new_n += 1
             trades[t["id"]] = t
         time.sleep(0.2)
+    print(f"API 수신 {fetched}건 / 이번에 새로 확인된 거래 {new_n}건")
+    if fetched == 0:
+        sys.exit("API가 0건을 돌려줬습니다. 인증키(MOLIT_KEY)와 활용신청 승인 상태를 확인하세요.")
 
     for t in trades.values():  # 평형·지분·공시가 표가 바뀌면 이전 거래에도 반영
         enrich(t, conf)
@@ -270,11 +284,14 @@ def main():
         best[g] = max(best.get(g, 0), t["price"])
 
     rows.sort(key=lambda t: (t["date"], t["price"]), reverse=True)
+    OPT = ("land", "lpp", "pub", "pubx")
+    out = [{k: v for k, v in t.items() if not (k in OPT and v is None)} for t in rows]
     DATA.write_text(json.dumps({
         "updated": dt.datetime.now(KST).isoformat(timespec="minutes"),
+        "fetched": fetched, "new_now": new_n,
         "count": len(rows),
         "complexes": {k: {"zone": z, "units": n} for k, (z, n) in conf["_units"].items()},
-        "trades": rows}, ensure_ascii=False), encoding="utf-8")
+        "trades": out}, ensure_ascii=False), encoding="utf-8")
 
     write_pyeong_table(rows, conf)
     miss = {}
